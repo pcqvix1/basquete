@@ -1,4 +1,4 @@
-// game.js (Versão Final e Estável: Solução de Game Loop Implementada)
+// game.js (Versão Final 5.0: Com Cesta e Mira Corrigidas)
 
 // ---------------------------------------------
 // 1. SETUP DO CANVAS E CONTEXTO 
@@ -28,7 +28,7 @@ let lastTime = 0;
 // 2. CONSTANTES DE FÍSICA E DESIGN
 // ---------------------------------------------
 
-const G = 0.5; // Gravidade
+const G = 0.5; 
 const TEMPO_DE_VOO = 45; 
 const RAIO_BOLA = 20;
 
@@ -80,7 +80,7 @@ const FisicaUtil = {
 };
 
 // ---------------------------------------------
-// 5. CLASSE CESTO
+// 5. CLASSE CESTO (CORRIGIDA)
 // ---------------------------------------------
 
 class Cesto {
@@ -88,11 +88,15 @@ class Cesto {
         this.LARGURA_TABELA = 10;
         this.ALTURA_TABELA = 120;
         this.POS_X = LARGURA - 100;
-        this.POS_Y = 150; 
+
+        // CORREÇÃO 1: Posiciona a cesta acima do chão (ALTURA_CHAO - altura_tabela - offset)
+        this.POS_Y = ALTURA_CHAO - this.ALTURA_TABELA - 50; 
+
         this.LARGURA_ARO = 60;
         this.RAIO_ARO = 5;
-        
-        this.aroY = this.POS_Y + 10;
+
+        // Posição correta do aro em relação à tabela
+        this.aroY = this.POS_Y + 40; 
         this.aroLeftX = this.POS_X - this.LARGURA_ARO;
         this.aroRightX = this.POS_X;
 
@@ -225,7 +229,7 @@ class Bola {
     }
 
     desenhar() {
-        // 1. Sombra projetada
+        // Sombra
         if (this.y < ALTURA_CHAO - RAIO_BOLA - 5) {
             const raioSombra = RAIO_BOLA * 0.8;
             ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; 
@@ -234,7 +238,7 @@ class Bola {
             ctx.fill();
         }
 
-        // 2. Corpo da Bola com Gradiente Radial
+        // Corpo da Bola
         const gradiente = ctx.createRadialGradient(
             this.x - RAIO_BOLA / 3, this.y - RAIO_BOLA / 3, 5, 
             this.x, this.y, RAIO_BOLA * 1.5                   
@@ -247,13 +251,13 @@ class Bola {
         ctx.arc(this.x, this.y, RAIO_BOLA, 0, Math.PI * 2);
         ctx.fill();
 
-        // 3. Brilho
+        // Brilho
         ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
         ctx.beginPath();
         ctx.arc(this.x - RAIO_BOLA * 0.5, this.y - RAIO_BOLA * 0.7, RAIO_BOLA * 0.2, 0, Math.PI * 2);
         ctx.fill();
         
-        // 4. Contorno
+        // Contorno
         ctx.strokeStyle = CORES.PRETO;
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -263,7 +267,7 @@ class Bola {
 }
 
 // ---------------------------------------------
-// 7. INICIALIZAÇÃO 
+// 7. INICIALIZAÇÃO E GAME LOOP
 // ---------------------------------------------
 
 let bola, cesto;
@@ -274,61 +278,52 @@ function iniciarJogo() {
     
     carregarRecorde();
     
-    // Inicia o Game Loop (Passo 3 da Solução)
+    // Inicia o Game Loop
     gameLoop();
 }
 
-// ---------------------------------------------
-// 8. O NOVO GAME LOOP (Passo 2 da Solução)
-// ---------------------------------------------
-
+// CORREÇÃO 3: Game Loop ajustado
 function gameLoop(currentTime) {
     const delta = currentTime - lastTime;
     
-    // Limitador de FPS (Mantido para garantir performance consistente)
     if (delta > (1000 / FPS) || lastTime === 0) { 
         lastTime = currentTime;
         
-        if (bola && cesto) { 
-            atualizar();
-            desenhar(); // Chama a função centralizada de desenho
-        }
+        atualizar(); // 1. Lógica e Posições
+        desenhar();  // 2. Desenho centralizado
     }
     
-    // Continua o loop (Recomendado: requestAnimationFrame)
     requestAnimationFrame(gameLoop); 
 }
 
 // ---------------------------------------------
-// 9. FUNÇÃO CENTRALIZADA DE DESENHO (Passo 1 da Solução ADAPTADA)
+// 8. FUNÇÃO CENTRALIZADA DE DESENHO (CORRIGIDA)
 // ---------------------------------------------
 
+// CORREÇÃO 2: Novo desenhar() com verificações de segurança
 function desenhar() {
-    // 1. Limpa a tela antes de desenhar
-    ctx.clearRect(0, 0, LARGURA, ALTURA);
+    ctx.clearRect(0, 0, LARGURA, ALTURA); // limpa o canvas
 
-    // 2. Desenho do Ambiente e Elementos Fixos
-    desenharAmbienteJS(); 
-    
-    // 3. Desenho de Objetos
-    cesto.desenhar();
-    bola.desenhar();
-    
-    // 4. Desenho de Overlay (Mira)
+    desenharAmbienteJS(); // fundo / chão
+
+    // mostra a linha de mira
     if (aPrepararLancamento && posRatoInicio && posRatoAtual) {
         desenharLinhaMiraJS();
     }
-    
-    // 5. Desenho do Placar (Overlay)
-    desenharPlacarJS();
+
+    // Desenha objetos APENAS se existirem (verificações de segurança)
+    if (cesto) cesto.desenhar();
+    if (bola) bola.desenhar();
+
+    desenharPlacarJS(); // placar e interface
 }
 
 // ---------------------------------------------
-// 10. ATUALIZAÇÃO (Lógica de Física)
+// 9. ATUALIZAÇÃO (Lógica de Física)
 // ---------------------------------------------
 
 function atualizar() {
-    if (bola.emMovimento) {
+    if (bola && cesto && bola.emMovimento) { // Verifica se bola e cesto existem
         bola.atualizarPosicao(); 
         cesto.verificarColisao(bola); 
 
@@ -340,7 +335,7 @@ function atualizar() {
 }
 
 // ---------------------------------------------
-// 11. FUNÇÕES AUXILIARES DE DESENHO (Mantidas)
+// 10. FUNÇÕES AUXILIARES DE DESENHO
 // ---------------------------------------------
 
 function desenharAmbienteJS() {
@@ -369,7 +364,7 @@ function desenharAmbienteJS() {
 }
 
 function desenharPlacarJS() {
-    // Recorde
+    // Placar
     ctx.fillStyle = CORES.PRETO; 
     ctx.font = "bold 18px Arial";
     ctx.fillText(`RECORDE: ${recorde}`, LARGURA - 162, 32); 
@@ -377,7 +372,6 @@ function desenharPlacarJS() {
     ctx.fillStyle = CORES.DESTAQUE_PLACA; 
     ctx.fillText(`RECORDE: ${recorde}`, LARGURA - 160, 30);
     
-    // Pontuação Principal
     ctx.fillStyle = CORES.PRETO; 
     ctx.font = "bold 60px SansSerif"; 
     ctx.fillText(`${pontuacao}`, 32, 72); 
@@ -385,7 +379,6 @@ function desenharPlacarJS() {
     ctx.fillStyle = CORES.BRANCO; 
     ctx.fillText(`${pontuacao}`, 30, 70);
 
-    // Rótulo "PONTOS"
     ctx.fillStyle = CORES.DESTAQUE_PLACA;
     ctx.font = "14px Arial";
     ctx.fillText("PONTOS", 32, 85);
@@ -435,7 +428,7 @@ function desenharLinhaMiraJS() {
 
 
 // ---------------------------------------------
-// 12. CONTROLES DO JOGO (Funções Globais)
+// 11. CONTROLES E SALVAR DADOS
 // ---------------------------------------------
 
 window.mudarDificuldade = function(nivel) {
@@ -476,7 +469,7 @@ function salvarRecorde(novoRecorde) {
 }
 
 // ---------------------------------------------
-// 13. INPUT (Mouse e Toque)
+// 12. INPUT (Mouse e Toque)
 // ---------------------------------------------
 
 canvas.addEventListener('mousedown', (e) => {
@@ -539,7 +532,7 @@ canvas.addEventListener('mousemove', (e) => {
 });
 
 // ---------------------------------------------
-// 14. INÍCIO DO JOGO
+// 13. INÍCIO DO JOGO
 // ---------------------------------------------
 
 iniciarJogo();
