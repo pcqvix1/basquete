@@ -1,23 +1,12 @@
-// game.js (Versão Final 6.0: Cesta, Mira e Pontuação Corrigidas)
+// game.js (Versão Final 7.0: Cesta Fixa e Mira Corrigida)
 
 // ---------------------------------------------
 // 1. SETUP DO CANVAS E CONTEXTO 
 // ---------------------------------------------
-
 const canvas = document.getElementById('gameCanvas');
-
-if (!canvas) {
-    console.error("Erro Crítico: Elemento canvas não encontrado. Verifique o index.html.");
-    throw new Error("Canvas não inicializado."); 
-}
+if (!canvas) throw new Error("Canvas não inicializado.");
 
 const ctx = canvas.getContext('2d');
-
-if (!ctx) {
-    console.error("Erro Crítico: Não foi possível obter o contexto 2D do canvas.");
-    throw new Error("Contexto 2D não suportado ou falhou na inicialização.");
-}
-
 const LARGURA = canvas.width;
 const ALTURA = canvas.height;
 const ALTURA_CHAO = ALTURA - 10;
@@ -27,7 +16,6 @@ let lastTime = 0;
 // ---------------------------------------------
 // 2. CONSTANTES DE FÍSICA E DESIGN
 // ---------------------------------------------
-
 const G = 0.5; 
 const TEMPO_DE_VOO = 45; 
 const RAIO_BOLA = 20;
@@ -47,7 +35,6 @@ const CORES = {
 // ---------------------------------------------
 // 3. NÍVEL DE DIFICULDADE E ESTADO GLOBAL
 // ---------------------------------------------
-
 const NiveisDificuldade = {
     FACIL: { fatorMira: 3.0, forcaMaxima: 50, erroLancamento: 0.0, coefRestituicaoMapa: 0.95 }, 
     MEDIO: { fatorMira: 1.5, forcaMaxima: 35, erroLancamento: 0.0, coefRestituicaoMapa: 0.7 }, 
@@ -70,7 +57,6 @@ let posRatoAtual = null;
 // ---------------------------------------------
 // 4. FUNÇÕES DE UTILIDADE (FisicaUtil)
 // ---------------------------------------------
-
 const FisicaUtil = {
     calcularVelocidadeParaAlvo(xInicial, yInicial, xAlvo, yAlvo, tempo) {
         const vx = (xAlvo - xInicial) / tempo;
@@ -80,24 +66,21 @@ const FisicaUtil = {
 };
 
 // ---------------------------------------------
-// 5. CLASSE CESTO
+// 5. CLASSE CESTO (CORRIGIDA)
 // ---------------------------------------------
-
 class Cesto {
     constructor() {
         this.LARGURA_TABELA = 10;
         this.ALTURA_TABELA = 120;
         this.POS_X = LARGURA - 100;
-        this.POS_Y = ALTURA_CHAO - this.ALTURA_TABELA - 50; // acima do chão
+        this.POS_Y = ALTURA_CHAO - this.ALTURA_TABELA - 50; // fixo no chão
         this.LARGURA_ARO = 60;
         this.RAIO_ARO = 5;
-
         this.aroY = this.POS_Y + 40; 
         this.aroLeftX = this.POS_X - this.LARGURA_ARO;
         this.aroRightX = this.POS_X;
-
         this.passouPeloAroTopo = false;
-        this.pontuou = false;
+        this.entrando = false; // flag para detectar bola passando
     }
 
     desenhar() {
@@ -110,47 +93,26 @@ class Cesto {
 
         // Aro
         ctx.fillStyle = 'red';
-        ctx.fillRect(this.aroLeftX, this.aroY - this.RAIO_ARO, this.LARGURA_ARO, this.RAIO_ARO * 2);
+        ctx.fillRect(this.aroLeftX, this.aroY - this.RAIO_ARO, this.LARGURA_ARO, this.RAIO_ARO*2);
 
         ctx.beginPath();
-        ctx.arc(this.aroLeftX, this.aroY, this.RAIO_ARO, 0, Math.PI * 2);
+        ctx.arc(this.aroLeftX, this.aroY, this.RAIO_ARO, 0, Math.PI*2);
         ctx.fill();
-
-        // Rede
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        for(let i = 0; i < 4; i++) {
-            ctx.moveTo(this.aroLeftX + (i * this.LARGURA_ARO/3), this.aroY + this.RAIO_ARO);
-            ctx.lineTo(this.aroLeftX + (i * this.LARGURA_ARO/3) + 10, this.aroY + 60);
-        }
-        ctx.stroke();
     }
-
+    
     verificarColisao(bola) {
-        // Colisão com tabela
+        // colisão com tabela
         if (bola.x + RAIO_BOLA >= this.POS_X && bola.x - RAIO_BOLA < this.POS_X + this.LARGURA_TABELA &&
             bola.y > this.POS_Y && bola.y < this.POS_Y + this.ALTURA_TABELA) {
             bola.velX *= -coefRestituicaoMapa;
-            bola.x = this.POS_X - RAIO_BOLA;
+            bola.x = this.POS_X - RAIO_BOLA; 
         }
-
-        // Colisão com aro (parte de baixo)
-        if (bola.x > this.aroLeftX && bola.x < this.aroRightX &&
-            bola.y + RAIO_BOLA >= this.aroY && bola.y - RAIO_BOLA < this.aroY + this.RAIO_ARO) {
-            if (bola.velY > 0) {
-                bola.velY *= -coefRestituicaoMapa;
-                bola.y = this.aroY - RAIO_BOLA;
-            }
-        }
-
-        // Colisão com ponta do aro
-        const dist = Math.hypot(bola.x - this.aroLeftX, bola.y - this.aroY);
+        // colisão com aro
+        const dist = Math.hypot(bola.x - (this.aroLeftX + this.LARGURA_ARO/2), bola.y - this.aroY);
         if (dist < RAIO_BOLA + this.RAIO_ARO) {
-            const angle = Math.atan2(bola.y - this.aroY, bola.x - this.aroLeftX);
-            bola.x = this.aroLeftX + Math.cos(angle) * (RAIO_BOLA + this.RAIO_ARO);
-            bola.y = this.aroY + Math.sin(angle) * (RAIO_BOLA + this.RAIO_ARO);
-
+            const angle = Math.atan2(bola.y - this.aroY, bola.x - (this.aroLeftX + this.LARGURA_ARO/2));
+            bola.x = (this.aroLeftX + this.LARGURA_ARO/2) + Math.cos(angle)*(RAIO_BOLA + this.RAIO_ARO);
+            bola.y = this.aroY + Math.sin(angle)*(RAIO_BOLA + this.RAIO_ARO);
             const speed = Math.hypot(bola.velX, bola.velY);
             const newAngle = angle + Math.PI;
             bola.velX = Math.cos(newAngle) * speed * coefRestituicaoMapa;
@@ -159,16 +121,13 @@ class Cesto {
     }
 
     verificarPontuacao(bola) {
-        const dentroDoAroX = bola.x > this.aroLeftX + this.RAIO_ARO && bola.x < this.aroRightX - this.RAIO_ARO;
-        
-        if (!this.pontuou && dentroDoAroX) {
-            if (bola.y - RAIO_BOLA > this.aroY + this.RAIO_ARO) {
-                this.pontuou = true;
-                return true;
-            }
-        }
+        const dentroHorizontal = bola.x > this.aroLeftX && bola.x < this.aroRightX;
+        if (dentroHorizontal && bola.y - RAIO_BOLA < this.aroY) this.entrando = true;
 
-        if (bola.y < this.aroY - 50) this.pontuou = false; // reseta quando bola sobe
+        if (this.entrando && bola.y - RAIO_BOLA > this.aroY) {
+            this.entrando = false;
+            return true;
+        }
         return false;
     }
 }
@@ -176,7 +135,6 @@ class Cesto {
 // ---------------------------------------------
 // 6. CLASSE BOLA
 // ---------------------------------------------
-
 class Bola {
     constructor(x, y, coefRestituicaoChao) {
         this.x = x;
@@ -195,11 +153,11 @@ class Bola {
 
     atualizarPosicao() {
         if (!this.emMovimento) return;
+
         this.velY += G;
         this.x += this.velX;
         this.y += this.velY;
 
-        // chão
         if (this.y + RAIO_BOLA >= ALTURA_CHAO) {
             this.y = ALTURA_CHAO - RAIO_BOLA;
             this.velY *= -this.coefRestituicaoChao;
@@ -210,24 +168,23 @@ class Bola {
             }
         }
 
-        // paredes
         if (this.x - RAIO_BOLA <= 0) { this.x = RAIO_BOLA; this.velX *= -coefRestituicaoMapa; }
-        if (this.x + RAIO_BOLA >= LARGURA) { this.x = LARGURA - RAIO_BOLA; this.velX *= -coefRestituicaoMapa; }
+        else if (this.x + RAIO_BOLA >= LARGURA) { this.x = LARGURA - RAIO_BOLA; this.velX *= -coefRestituicaoMapa; }
         if (this.y - RAIO_BOLA <= 0) { this.y = RAIO_BOLA; this.velY *= -coefRestituicaoMapa; }
     }
 
     desenhar() {
         // Sombra
         if (this.y < ALTURA_CHAO - RAIO_BOLA - 5) {
-            const raioSombra = RAIO_BOLA * 0.8;
+            const raioSombra = RAIO_BOLA*0.8;
             ctx.fillStyle = 'rgba(0,0,0,0.4)';
             ctx.beginPath();
-            ctx.ellipse(this.x + 5, ALTURA_CHAO - raioSombra/4, raioSombra*2, raioSombra/4, 0,0,Math.PI*2);
+            ctx.ellipse(this.x+5, ALTURA_CHAO - raioSombra/4, raioSombra*2, raioSombra/4, 0, 0, Math.PI*2);
             ctx.fill();
         }
 
         // Corpo da bola
-        const gradiente = ctx.createRadialGradient(this.x - RAIO_BOLA/3, this.y - RAIO_BOLA/3, 5, this.x, this.y, RAIO_BOLA*1.5);
+        const gradiente = ctx.createRadialGradient(this.x-RAIO_BOLA/3, this.y-RAIO_BOLA/3, 5, this.x, this.y, RAIO_BOLA*1.5);
         gradiente.addColorStop(0, CORES.LARANJA_CLARO);
         gradiente.addColorStop(1, CORES.LARANJA_ESCURO);
         ctx.fillStyle = gradiente;
@@ -235,13 +192,13 @@ class Bola {
         ctx.arc(this.x, this.y, RAIO_BOLA, 0, Math.PI*2);
         ctx.fill();
 
-        // Brilho
+        // brilho
         ctx.fillStyle = 'rgba(255,255,255,0.7)';
         ctx.beginPath();
         ctx.arc(this.x - RAIO_BOLA*0.5, this.y - RAIO_BOLA*0.7, RAIO_BOLA*0.2, 0, Math.PI*2);
         ctx.fill();
 
-        // Contorno
+        // contorno
         ctx.strokeStyle = CORES.PRETO;
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -253,19 +210,18 @@ class Bola {
 // ---------------------------------------------
 // 7. INICIALIZAÇÃO E GAME LOOP
 // ---------------------------------------------
-
 let bola, cesto;
 
 function iniciarJogo() {
     cesto = new Cesto();
-    bola = new Bola(100, ALTURA_CHAO - RAIO_BOLA, dificuldadeAtual.coefRestituicaoMapa); 
+    bola = new Bola(100, ALTURA_CHAO - RAIO_BOLA, dificuldadeAtual.coefRestituicaoMapa);
     carregarRecorde();
-    gameLoop();
+    requestAnimationFrame(gameLoop);
 }
 
 function gameLoop(currentTime) {
     const delta = currentTime - lastTime;
-    if (delta > (1000/FPS) || lastTime === 0) {
+    if (delta > 1000 / FPS || lastTime === 0) {
         lastTime = currentTime;
         atualizar();
         desenhar();
@@ -274,16 +230,14 @@ function gameLoop(currentTime) {
 }
 
 // ---------------------------------------------
-// 8. DESENHO
+// 8. DESENHO CENTRALIZADO
 // ---------------------------------------------
-
 function desenhar() {
-    ctx.clearRect(0, 0, LARGURA, ALTURA);
+    ctx.clearRect(0,0,LARGURA,ALTURA);
     desenharAmbienteJS();
 
-    if (aPrepararLancamento && posRatoInicio && posRatoAtual) {
-        desenharLinhaMiraJS();
-    }
+    // mira
+    if (aPrepararLancamento) desenharLinhaMiraJS();
 
     if (cesto) cesto.desenhar();
     if (bola) bola.desenhar();
@@ -292,17 +246,17 @@ function desenhar() {
 }
 
 // ---------------------------------------------
-// 9. ATUALIZAÇÃO
+// 9. LÓGICA DE ATUALIZAÇÃO
 // ---------------------------------------------
-
 function atualizar() {
-    if (bola && cesto && bola.emMovimento) {
+    if (bola) {
         bola.atualizarPosicao();
-        cesto.verificarColisao(bola);
-
-        if (cesto.verificarPontuacao(bola)) {
-            pontuacao++;
-            salvarRecorde(pontuacao);
+        if (cesto) {
+            cesto.verificarColisao(bola);
+            if (cesto.verificarPontuacao(bola)) {
+                pontuacao++;
+                salvarRecorde(pontuacao);
+            }
         }
     }
 }
@@ -310,7 +264,6 @@ function atualizar() {
 // ---------------------------------------------
 // 10. FUNÇÕES AUXILIARES DE DESENHO
 // ---------------------------------------------
-
 function desenharAmbienteJS() {
     const gradiente = ctx.createLinearGradient(0,0,0,ALTURA_CHAO);
     gradiente.addColorStop(0, CORES.AZUL_CEU_CLARO);
@@ -331,9 +284,9 @@ function desenharPlacarJS() {
 
     ctx.fillStyle = CORES.PRETO;
     ctx.font = "bold 60px SansSerif";
-    ctx.fillText(`${pontuacao}`,32,72);
+    ctx.fillText(`${pontuacao}`, 32,72);
     ctx.fillStyle = CORES.BRANCO;
-    ctx.fillText(`${pontuacao}`,30,70);
+    ctx.fillText(`${pontuacao}`, 30,70);
 
     ctx.fillStyle = CORES.DESTAQUE_PLACA;
     ctx.font = "14px Arial";
@@ -341,46 +294,44 @@ function desenharPlacarJS() {
 }
 
 function desenharLinhaMiraJS() {
-    if (!posRatoAtual || !posRatoInicio) return;
-    const dx = posRatoAtual.x - posRatoInicio.x;
-    const dy = posRatoAtual.y - posRatoInicio.y;
+    if (!posRatoAtual || !posRatoInicio || !bola) return;
+    if (!bola.emMovimento && aPrepararLancamento) {
+        const dx = posRatoAtual.x - posRatoInicio.x;
+        const dy = posRatoAtual.y - posRatoInicio.y;
+        const xAlvo = bola.x + dx*fatorForcaMira;
+        const yAlvo = bola.y + dy*fatorForcaMira;
+        const yLimitado = Math.max(50, yAlvo);
 
-    const xAlvo = bola.x + dx * fatorForcaMira;
-    const yAlvo = bola.y + dy * fatorForcaMira;
-    const yLimitado = Math.max(50,yAlvo);
+        const velocidade = FisicaUtil.calcularVelocidadeParaAlvo(bola.x, bola.y, xAlvo, yLimitado, TEMPO_DE_VOO);
+        let xTemp = bola.x, yTemp = bola.y;
+        let vxTemp = velocidade.x, vyTemp = velocidade.y;
 
-    const velocidade = FisicaUtil.calcularVelocidadeParaAlvo(bola.x, bola.y, xAlvo, yLimitado, TEMPO_DE_VOO);
+        ctx.strokeStyle = CORES.BRANCO;
+        ctx.setLineDash([4,4]);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(xTemp,yTemp);
+        for (let t=0;t<TEMPO_DE_VOO;t++) {
+            vyTemp += G;
+            xTemp += vxTemp;
+            yTemp += vyTemp;
+            ctx.lineTo(xTemp,yTemp);
+            if (yTemp>=ALTURA_CHAO-RAIO_BOLA || xTemp<=0 || xTemp>=LARGURA || yTemp<=0) break;
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
 
-    let xTemp = bola.x, yTemp = bola.y;
-    let vxTemp = velocidade.x, vyTemp = velocidade.y;
-
-    ctx.strokeStyle = CORES.BRANCO;
-    ctx.setLineDash([4,4]);
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(xTemp,yTemp);
-
-    for (let t=0; t<TEMPO_DE_VOO; t++) {
-        vyTemp += G;
-        xTemp += vxTemp;
-        yTemp += vyTemp;
-        ctx.lineTo(xTemp,yTemp);
-        if (yTemp>=ALTURA_CHAO-RAIO_BOLA || xTemp<=0 || xTemp>=LARGURA || yTemp<=0) break;
+        ctx.fillStyle = 'red';
+        ctx.beginPath();
+        ctx.arc(xTemp,yTemp,4,0,Math.PI*2);
+        ctx.fill();
     }
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.fillStyle='red';
-    ctx.beginPath();
-    ctx.arc(xTemp,yTemp,4,0,Math.PI*2);
-    ctx.fill();
 }
 
 // ---------------------------------------------
 // 11. CONTROLES E RECORDES
 // ---------------------------------------------
-
-window.mudarDificuldade = function(nivel) {
+window.mudarDificuldade = function(nivel){
     dificuldadeAtual = NiveisDificuldade[nivel];
     fatorForcaMira = dificuldadeAtual.fatorMira;
     forcaMaxima = dificuldadeAtual.forcaMaxima;
@@ -389,78 +340,76 @@ window.mudarDificuldade = function(nivel) {
     reiniciarBola();
 }
 
-window.reiniciarBola = function() {
-    bola = new Bola(100, ALTURA_CHAO - RAIO_BOLA, dificuldadeAtual.coefRestituicaoMapa);
+window.reiniciarBola = function(){
+    bola = new Bola(100, ALTURA_CHAO-RAIO_BOLA, dificuldadeAtual.coefRestituicaoMapa);
     cesto.passouPeloAroTopo = false;
-    cesto.pontuou = false;
 }
 
-window.reiniciarTudo = function() {
-    if (pontuacao > recorde) salvarRecorde(pontuacao);
+window.reiniciarTudo = function(){
+    if(pontuacao>recorde) salvarRecorde(pontuacao);
     pontuacao=0;
     reiniciarBola();
 }
 
-function carregarRecorde() {
+function carregarRecorde(){
     const r = localStorage.getItem('basqueteRecorde');
     recorde = r ? parseInt(r) : 0;
 }
 
-function salvarRecorde(novoRecorde) {
-    if (novoRecorde > recorde) {
-        recorde = novoRecorde;
-        localStorage.setItem('basqueteRecorde', recorde);
-    }
+function salvarRecorde(novo){
+    if(novo>recorde){ recorde = novo; localStorage.setItem('basqueteRecorde',recorde); }
 }
 
 // ---------------------------------------------
-// 12. INPUT (Mouse e Toque)
+// 12. INPUT (Mouse)
 // ---------------------------------------------
-
 canvas.addEventListener('mousedown',(e)=>{
     const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    if (!bola.emMovimento && Math.hypot(mouseX-bola.x,mouseY-bola.y)<RAIO_BOLA*2){
-        aPrepararLancamento=true;
-        posRatoInicio={x:mouseX,y:mouseY};
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    if(!bola.emMovimento && Math.hypot(mx-bola.x,my-bola.y)<RAIO_BOLA*2){
+        aPrepararLancamento = true;
+        posRatoInicio = {x:mx, y:my};
     }
 });
 
 canvas.addEventListener('mouseup',(e)=>{
-    if (aPrepararLancamento){
+    if(aPrepararLancamento){
         aPrepararLancamento=false;
-        const rect=canvas.getBoundingClientRect();
-        const mouseX=e.clientX-rect.left;
-        const mouseY=e.clientY-rect.top;
-        const dx=mouseX-posRatoInicio.x;
-        const dy=mouseY-posRatoInicio.y;
-        const xAlvo=bola.x+dx*fatorForcaMira;
-        const yAlvo=bola.y+dy*fatorForcaMira;
-        const yLimitado=Math.max(50,yAlvo);
-        const vel=FisicaUtil.calcularVelocidadeParaAlvo(bola.x,bola.y,xAlvo,yLimitado,TEMPO_DE_VOO);
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const dx = mx-posRatoInicio.x;
+        const dy = my-posRatoInicio.y;
+        const xAlvo = bola.x + dx*fatorForcaMira;
+        const yAlvo = bola.y + dy*fatorForcaMira;
+        const yLimitado = Math.max(50,yAlvo);
+        const velocidade = FisicaUtil.calcularVelocidadeParaAlvo(bola.x, bola.y, xAlvo, yLimitado, TEMPO_DE_VOO);
+        let forcaX = velocidade.x;
+        let forcaY = velocidade.y;
 
-        let vx=vel.x, vy=vel.y;
-        if (erroLancamento>0){
-            const f=Math.random()*2*erroLancamento-erroLancamento;
-            vx*=(1+f); vy*=(1+f*0.5);
+        if(erroLancamento>0){
+            const fatorErro=Math.random()*2*erroLancamento-erroLancamento;
+            forcaX*=(1+fatorErro);
+            forcaY*=(1+fatorErro*0.5);
         }
-        const total=Math.hypot(vx,vy);
-        if (total>forcaMaxima){
-            const fator=forcaMaxima/total;
-            vx*=fator; vy*=fator;
+
+        const total=Math.hypot(forcaX,forcaY);
+        if(total>forcaMaxima){ 
+            const f=forcaMaxima/total;
+            forcaX*=f; forcaY*=f;
         }
-        if (total>1) bola.lancar(vx,vy);
+        if(total>1) bola.lancar(forcaX,forcaY);
     }
 });
 
 canvas.addEventListener('mousemove',(e)=>{
     const rect=canvas.getBoundingClientRect();
-    posRatoAtual={x:e.clientX-rect.left,y:e.clientY-rect.top};
+    posRatoAtual={x:e.clientX-rect.left, y:e.clientY-rect.top};
 });
 
 // ---------------------------------------------
-// 13. INÍCIO
+// 13. INÍCIO DO JOGO
 // ---------------------------------------------
-
 iniciarJogo();
