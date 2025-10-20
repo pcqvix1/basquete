@@ -1,21 +1,18 @@
-// game.js (Versão Final: Código Completo e Robusto)
+// game.js (Versão Final e Estável: Solução de Game Loop Implementada)
 
 // ---------------------------------------------
-// 1. SETUP DO CANVAS E CONTEXTO (CORREÇÃO DE ROBUSTEZ)
+// 1. SETUP DO CANVAS E CONTEXTO 
 // ---------------------------------------------
 
 const canvas = document.getElementById('gameCanvas');
 
-// 1. Verificação do Canvas
 if (!canvas) {
     console.error("Erro Crítico: Elemento canvas não encontrado. Verifique o index.html.");
     throw new Error("Canvas não inicializado."); 
 }
 
-// 2. Tenta Obter o Contexto
 const ctx = canvas.getContext('2d');
 
-// 3. Verificação do Contexto
 if (!ctx) {
     console.error("Erro Crítico: Não foi possível obter o contexto 2D do canvas.");
     throw new Error("Contexto 2D não suportado ou falhou na inicialização.");
@@ -91,7 +88,6 @@ class Cesto {
         this.LARGURA_TABELA = 10;
         this.ALTURA_TABELA = 120;
         this.POS_X = LARGURA - 100;
-        // Posição Y ajustada para ficar consistente (150px do topo)
         this.POS_Y = 150; 
         this.LARGURA_ARO = 60;
         this.RAIO_ARO = 5;
@@ -132,7 +128,6 @@ class Cesto {
     }
     
     verificarColisao(bola) {
-        // Colisão com a Tabela (lado esquerdo)
         if (bola.x + RAIO_BOLA >= this.POS_X && bola.x - RAIO_BOLA < this.POS_X + this.LARGURA_TABELA && 
             bola.y > this.POS_Y && bola.y < this.POS_Y + this.ALTURA_TABELA) {
             
@@ -140,7 +135,6 @@ class Cesto {
             bola.x = this.POS_X - RAIO_BOLA; 
         }
         
-        // Colisão com a parte de baixo do aro
         if (bola.x > this.aroLeftX && bola.x < this.aroRightX &&
             bola.y + RAIO_BOLA >= this.aroY && bola.y - RAIO_BOLA < this.aroY + this.RAIO_ARO) {
 
@@ -150,7 +144,6 @@ class Cesto {
             }
         }
         
-        // Colisão com a ponta esquerda do aro
         const dist = Math.hypot(bola.x - this.aroLeftX, bola.y - this.aroY);
         if (dist < RAIO_BOLA + this.RAIO_ARO) {
             const angle = Math.atan2(bola.y - this.aroY, bola.x - this.aroLeftX);
@@ -167,12 +160,10 @@ class Cesto {
     verificarPontuacao(bola) {
         const noCaminhoCerto = bola.x > this.aroLeftX + this.RAIO_ARO && bola.x < this.aroRightX - this.RAIO_ARO;
 
-        // Passou por cima do aro? (Descendo)
         if (noCaminhoCerto && bola.y + RAIO_BOLA < this.aroY && bola.velY > 0) {
             this.passouPeloAroTopo = true;
         }
 
-        // Entrou? (Passou do aro para baixo e veio por cima)
         if (this.passouPeloAroTopo && bola.y - RAIO_BOLA > this.aroY) {
             this.passouPeloAroTopo = false; 
             return true;
@@ -209,7 +200,6 @@ class Bola {
         this.x += this.velX;
         this.y += this.velY;
 
-        // Colisão com o Chão
         if (this.y + RAIO_BOLA >= ALTURA_CHAO) { 
             this.y = ALTURA_CHAO - RAIO_BOLA; 
             this.velY *= -this.coefRestituicaoChao; 
@@ -221,7 +211,6 @@ class Bola {
             }
         }
         
-        // Colisão com as Paredes
         if (this.x - RAIO_BOLA <= 0) {
             this.x = RAIO_BOLA;
             this.velX *= -coefRestituicaoMapa;
@@ -274,7 +263,7 @@ class Bola {
 }
 
 // ---------------------------------------------
-// 7. INICIALIZAÇÃO E GAME LOOP
+// 7. INICIALIZAÇÃO 
 // ---------------------------------------------
 
 let bola, cesto;
@@ -285,31 +274,62 @@ function iniciarJogo() {
     
     carregarRecorde();
     
-    requestAnimationFrame(gameLoop);
+    // Inicia o Game Loop (Passo 3 da Solução)
+    gameLoop();
 }
+
+// ---------------------------------------------
+// 8. O NOVO GAME LOOP (Passo 2 da Solução)
+// ---------------------------------------------
 
 function gameLoop(currentTime) {
     const delta = currentTime - lastTime;
-    if (delta > (1000 / FPS)) {
+    
+    // Limitador de FPS (Mantido para garantir performance consistente)
+    if (delta > (1000 / FPS) || lastTime === 0) { 
         lastTime = currentTime;
         
         if (bola && cesto) { 
             atualizar();
-            desenhar();
+            desenhar(); // Chama a função centralizada de desenho
         }
     }
     
-    requestAnimationFrame(gameLoop);
+    // Continua o loop (Recomendado: requestAnimationFrame)
+    requestAnimationFrame(gameLoop); 
 }
 
 // ---------------------------------------------
-// 8. ATUALIZAÇÃO E DESENHO
+// 9. FUNÇÃO CENTRALIZADA DE DESENHO (Passo 1 da Solução ADAPTADA)
+// ---------------------------------------------
+
+function desenhar() {
+    // 1. Limpa a tela antes de desenhar
+    ctx.clearRect(0, 0, LARGURA, ALTURA);
+
+    // 2. Desenho do Ambiente e Elementos Fixos
+    desenharAmbienteJS(); 
+    
+    // 3. Desenho de Objetos
+    cesto.desenhar();
+    bola.desenhar();
+    
+    // 4. Desenho de Overlay (Mira)
+    if (aPrepararLancamento && posRatoInicio && posRatoAtual) {
+        desenharLinhaMiraJS();
+    }
+    
+    // 5. Desenho do Placar (Overlay)
+    desenharPlacarJS();
+}
+
+// ---------------------------------------------
+// 10. ATUALIZAÇÃO (Lógica de Física)
 // ---------------------------------------------
 
 function atualizar() {
     if (bola.emMovimento) {
         bola.atualizarPosicao(); 
-        
         cesto.verificarColisao(bola); 
 
         if (cesto.verificarPontuacao(bola)) {
@@ -319,25 +339,9 @@ function atualizar() {
     }
 }
 
-function desenhar() {
-    // 1. Limpa a tela
-    ctx.clearRect(0, 0, LARGURA, ALTURA);
-
-    // 2. Ambiente e Chão
-    desenharAmbienteJS();
-
-    // 3. Desenho da Mira
-    if (aPrepararLancamento && posRatoInicio && posRatoAtual) {
-        desenharLinhaMiraJS();
-    }
-    
-    // 4. Objetos de Jogo
-    cesto.desenhar();
-    bola.desenhar(); 
-    
-    // 5. Placar
-    desenharPlacarJS();
-}
+// ---------------------------------------------
+// 11. FUNÇÕES AUXILIARES DE DESENHO (Mantidas)
+// ---------------------------------------------
 
 function desenharAmbienteJS() {
     const gradiente = ctx.createLinearGradient(0, 0, 0, ALTURA_CHAO);
@@ -431,7 +435,7 @@ function desenharLinhaMiraJS() {
 
 
 // ---------------------------------------------
-// 9. CONTROLES DO JOGO (Funções Globais)
+// 12. CONTROLES DO JOGO (Funções Globais)
 // ---------------------------------------------
 
 window.mudarDificuldade = function(nivel) {
@@ -472,7 +476,7 @@ function salvarRecorde(novoRecorde) {
 }
 
 // ---------------------------------------------
-// 10. INPUT (Mouse e Toque)
+// 13. INPUT (Mouse e Toque)
 // ---------------------------------------------
 
 canvas.addEventListener('mousedown', (e) => {
@@ -534,5 +538,8 @@ canvas.addEventListener('mousemove', (e) => {
     };
 });
 
-// Inicia o jogo quando o script é carregado
+// ---------------------------------------------
+// 14. INÍCIO DO JOGO
+// ---------------------------------------------
+
 iniciarJogo();
