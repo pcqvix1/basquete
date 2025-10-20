@@ -1,14 +1,12 @@
-// game.js (Versão 2.0: Completo e com Correções de Bug)
+// game.js (Versão 3.0: Completo e com Todas as Correções de Inicialização e Escopo)
 
 // ---------------------------------------------
 // 1. SETUP DO CANVAS E CONTEXTO
 // ---------------------------------------------
 
 const canvas = document.getElementById('gameCanvas');
-// Verifica se o canvas existe antes de continuar (melhor prática web)
 if (!canvas) {
     console.error("Erro: Elemento canvas não encontrado. Verifique o index.html.");
-    // Saímos para evitar erros
     throw new Error("Canvas não inicializado."); 
 }
 
@@ -40,7 +38,7 @@ const CORES = {
 };
 
 // ---------------------------------------------
-// 3. NÍVEL DE DIFICULDADE
+// 3. NÍVEL DE DIFICULDADE E ESTADO GLOBAL
 // ---------------------------------------------
 
 const NiveisDificuldade = {
@@ -57,6 +55,11 @@ let coefRestituicaoMapa = dificuldadeAtual.coefRestituicaoMapa;
 
 let pontuacao = 0;
 let recorde = 0; 
+
+// Variáveis de Estado do Mouse/Mira (CORREÇÃO DE ESCOPO - B2)
+let aPrepararLancamento = false;
+let posRatoInicio = null;
+let posRatoAtual = null; 
 
 // ---------------------------------------------
 // 4. FUNÇÕES DE UTILIDADE (FisicaUtil)
@@ -79,8 +82,8 @@ class Cesto {
         this.LARGURA_TABELA = 10;
         this.ALTURA_TABELA = 120;
         this.POS_X = LARGURA - 100;
-        // CORREÇÃO B1: Posição Y ajustada para ficar no meio da tela
-        this.POS_Y = ALTURA - 280; 
+        // CORREÇÃO FINAL: Posição Y ajustada para ficar consistentemente abaixo do topo
+        this.POS_Y = 150; 
         this.LARGURA_ARO = 60;
         this.RAIO_ARO = 5;
         
@@ -103,7 +106,7 @@ class Cesto {
         ctx.fillStyle = 'red';
         ctx.fillRect(this.aroLeftX, this.aroY - this.RAIO_ARO, this.LARGURA_ARO, this.RAIO_ARO * 2);
 
-        // Ponta do aro (para visual)
+        // Ponta do aro
         ctx.beginPath();
         ctx.arc(this.aroLeftX, this.aroY, this.RAIO_ARO, 0, Math.PI * 2);
         ctx.fill();
@@ -128,7 +131,7 @@ class Cesto {
             bola.x = this.POS_X - RAIO_BOLA; 
         }
         
-        // Colisão com a parte de baixo do aro (como um retângulo)
+        // Colisão com a parte de baixo do aro
         if (bola.x > this.aroLeftX && bola.x < this.aroRightX &&
             bola.y + RAIO_BOLA >= this.aroY && bola.y - RAIO_BOLA < this.aroY + this.RAIO_ARO) {
 
@@ -138,7 +141,7 @@ class Cesto {
             }
         }
         
-        // Colisão com a ponta esquerda do aro (cilindro)
+        // Colisão com a ponta esquerda do aro
         const dist = Math.hypot(bola.x - this.aroLeftX, bola.y - this.aroY);
         if (dist < RAIO_BOLA + this.RAIO_ARO) {
             const angle = Math.atan2(bola.y - this.aroY, bola.x - this.aroLeftX);
@@ -153,15 +156,14 @@ class Cesto {
     }
 
     verificarPontuacao(bola) {
-        // 1. O ponto de pontuação está entre os aros
         const noCaminhoCerto = bola.x > this.aroLeftX + this.RAIO_ARO && bola.x < this.aroRightX - this.RAIO_ARO;
 
-        // 2. Passou por cima do aro? (Verifica se está a descer por cima)
+        // Passou por cima do aro? (Descendo)
         if (noCaminhoCerto && bola.y + RAIO_BOLA < this.aroY && bola.velY > 0) {
             this.passouPeloAroTopo = true;
         }
 
-        // 3. Entrou? (Passou do ponto do aro para baixo e veio por cima)
+        // Entrou? (Passou do aro para baixo e veio por cima)
         if (this.passouPeloAroTopo && bola.y - RAIO_BOLA > this.aroY) {
             this.passouPeloAroTopo = false; 
             return true;
@@ -182,11 +184,6 @@ class Bola {
         this.velY = 0;
         this.emMovimento = false;
         this.coefRestituicaoChao = coefRestituicaoChao;
-        
-        // CORREÇÃO B3: Garante que a bola não começa dentro da área de pontuação (y muito baixo)
-        if (cesto && this.y - RAIO_BOLA >= cesto.aroY) {
-            this.y = cesto.aroY - RAIO_BOLA - 1; // Coloca a bola um pouco acima do aro
-        }
     }
 
     lancar(vx, vy) {
@@ -198,10 +195,8 @@ class Bola {
     atualizarPosicao() {
         if (!this.emMovimento) return;
 
-        // Aplicar Gravidade
         this.velY += G;
         
-        // Atualizar Posição
         this.x += this.velX;
         this.y += this.velY;
 
@@ -210,7 +205,6 @@ class Bola {
             this.y = ALTURA_CHAO - RAIO_BOLA; 
             this.velY *= -this.coefRestituicaoChao; 
             
-            // Parar se estiver muito lenta
             if (Math.abs(this.velY) < 1 && Math.abs(this.velX) < 1) {
                 this.emMovimento = false;
                 this.velX = 0;
@@ -218,7 +212,7 @@ class Bola {
             }
         }
         
-        // Colisão com as Paredes Laterais e Superior
+        // Colisão com as Paredes
         if (this.x - RAIO_BOLA <= 0) {
             this.x = RAIO_BOLA;
             this.velX *= -coefRestituicaoMapa;
@@ -242,7 +236,7 @@ class Bola {
             ctx.fill();
         }
 
-        // 2. Corpo da Bola com Gradiente Radial (Volume 3D)
+        // 2. Corpo da Bola com Gradiente Radial
         const gradiente = ctx.createRadialGradient(
             this.x - RAIO_BOLA / 3, this.y - RAIO_BOLA / 3, 5, 
             this.x, this.y, RAIO_BOLA * 1.5                   
@@ -277,8 +271,8 @@ class Bola {
 let bola, cesto;
 
 function iniciarJogo() {
+    // CORREÇÃO DE INICIALIZAÇÃO: Garantimos que o cesto é criado primeiro.
     cesto = new Cesto();
-    // A inicialização da bola agora usa o objeto cesto já criado
     bola = new Bola(100, ALTURA_CHAO - RAIO_BOLA, dificuldadeAtual.coefRestituicaoMapa); 
     
     carregarRecorde();
@@ -291,7 +285,7 @@ function gameLoop(currentTime) {
     if (delta > (1000 / FPS)) {
         lastTime = currentTime;
         
-        // CORREÇÃO B4: Verifica se os objetos existem antes de tentar atualizar/desenhar
+        // Verificação robusta para evitar erros no início
         if (bola && cesto) { 
             atualizar();
             desenhar();
@@ -318,27 +312,7 @@ function atualizar() {
     }
 }
 
-function desenhar() {
-    // 1. Limpa a tela
-    ctx.clearRect(0, 0, LARGURA, ALTURA);
-
-    // 2. Ambiente e Chão
-    desenharAmbienteJS();
-
-    // 3. Desenho da Mira
-    if (aPrepararLancamento && posRatoInicio && posRatoAtual) { // Verifica o posRatoAtual
-        desenharLinhaMiraJS();
-    }
-    
-    // 4. Objetos de Jogo
-    cesto.desenhar();
-    bola.desenhar(); 
-    
-    // 5. Placar
-    desenharPlacarJS();
-}
-
-// Funções de Desenho Auxiliares (mantidas inalteradas)
+// Funções de Desenho Auxiliares
 function desenharAmbienteJS() {
     const gradiente = ctx.createLinearGradient(0, 0, 0, ALTURA_CHAO);
     gradiente.addColorStop(0, CORES.AZUL_CEU_CLARO);
@@ -365,7 +339,7 @@ function desenharAmbienteJS() {
 }
 
 function desenharPlacarJS() {
-    // --- Recorde ---
+    // Recorde
     ctx.fillStyle = CORES.PRETO; 
     ctx.font = "bold 18px Arial";
     ctx.fillText(`RECORDE: ${recorde}`, LARGURA - 162, 32); 
@@ -373,7 +347,7 @@ function desenharPlacarJS() {
     ctx.fillStyle = CORES.DESTAQUE_PLACA; 
     ctx.fillText(`RECORDE: ${recorde}`, LARGURA - 160, 30);
     
-    // --- Pontuação Principal ---
+    // Pontuação Principal
     ctx.fillStyle = CORES.PRETO; 
     ctx.font = "bold 60px SansSerif"; 
     ctx.fillText(`${pontuacao}`, 32, 72); 
@@ -385,6 +359,49 @@ function desenharPlacarJS() {
     ctx.fillStyle = CORES.DESTAQUE_PLACA;
     ctx.font = "14px Arial";
     ctx.fillText("PONTOS", 32, 85);
+}
+
+function desenharLinhaMiraJS() {
+    // CORREÇÃO DE ESCOPO: Usa a variável global armazenada pelo mousemove
+    if (!posRatoAtual || !posRatoInicio) return; 
+
+    const dxArrasto = posRatoAtual.x - posRatoInicio.x;
+    const dyArrasto = posRatoAtual.y - posRatoInicio.y;
+
+    const xAlvo = bola.x + dxArrasto * fatorForcaMira;
+    const yAlvo = bola.y + dyArrasto * fatorForcaMira;
+    
+    const yLimitado = Math.max(50, yAlvo);
+
+    const velocidade = FisicaUtil.calcularVelocidadeParaAlvo(bola.x, bola.y, xAlvo, yLimitado, TEMPO_DE_VOO);
+    
+    // Desenhar a Trajetória Parabólica
+    let xTemp = bola.x, yTemp = bola.y;
+    let vxTemp = velocidade.x, vyTemp = velocidade.y;
+    
+    ctx.strokeStyle = CORES.BRANCO;
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(xTemp, yTemp);
+
+    for (let t = 0; t < TEMPO_DE_VOO; t++) {
+        vyTemp += G; 
+        xTemp += vxTemp;
+        yTemp += vyTemp;
+        
+        ctx.lineTo(xTemp, yTemp);
+        
+        if (yTemp >= ALTURA_CHAO - RAIO_BOLA || xTemp <= 0 || xTemp >= LARGURA || yTemp <= 0) break;
+    }
+    ctx.stroke();
+    ctx.setLineDash([]); 
+
+    // Desenha o ponto final (O Alvo)
+    ctx.fillStyle = 'red';
+    ctx.beginPath();
+    ctx.arc(xTemp, yTemp, 4, 0, Math.PI * 2);
+    ctx.fill();
 }
 
 
@@ -433,10 +450,6 @@ function salvarRecorde(novoRecorde) {
 // 10. INPUT (Mouse e Toque)
 // ---------------------------------------------
 
-let aPrepararLancamento = false;
-let posRatoInicio = null;
-let posRatoAtual = null; // Bug B2: Adicionado para guardar o ponto atual do mouse/rato
-
 canvas.addEventListener('mousedown', (e) => {
     const rect = canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
@@ -456,7 +469,6 @@ canvas.addEventListener('mouseup', (e) => {
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
 
-        // Utilizamos as coordenadas finais do mouse (clientX/Y)
         const dxArrasto = mouseX - posRatoInicio.x;
         const dyArrasto = mouseY - posRatoInicio.y;
         
@@ -470,14 +482,12 @@ canvas.addEventListener('mouseup', (e) => {
         let forcaX = velocidade.x;
         let forcaY = velocidade.y;
 
-        // Implementar o Erro de Lançamento
         if (erroLancamento > 0) {
             const fatorErro = Math.random() * 2 * erroLancamento - erroLancamento;
             forcaX *= (1 + fatorErro); 
             forcaY *= (1 + fatorErro * 0.5); 
         }
         
-        // Limitação de Força
         const forcaTotal = Math.hypot(forcaX, forcaY);
         if (forcaTotal > forcaMaxima) {
             const fatorAjuste = forcaMaxima / forcaTotal;
@@ -491,58 +501,14 @@ canvas.addEventListener('mouseup', (e) => {
     }
 });
 
-// Bug B2: Este listener é crucial para que a mira funcione no gameLoop
+// Listener de mousemove CRUCIAL para alimentar a variável global posRatoAtual
 canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
     posRatoAtual = { 
         x: e.clientX - rect.left, 
         y: e.clientY - rect.top 
     };
-    // Não precisamos de repainting aqui, pois o gameLoop já está a fazê-lo a 60 FPS
 });
-
-function desenharLinhaMiraJS() {
-    // Bug B2: Usa a variável global armazenada pelo mousemove
-    if (!posRatoAtual) return; 
-
-    const dxArrasto = posRatoAtual.x - posRatoInicio.x;
-    const dyArrasto = posRatoAtual.y - posRatoInicio.y;
-
-    const xAlvo = bola.x + dxArrasto * fatorForcaMira;
-    const yAlvo = bola.y + dyArrasto * fatorForcaMira;
-    
-    const yLimitado = Math.max(50, yAlvo);
-
-    const velocidade = FisicaUtil.calcularVelocidadeParaAlvo(bola.x, bola.y, xAlvo, yLimitado, TEMPO_DE_VOO);
-    
-    // Desenhar a Trajetória Parabólica
-    let xTemp = bola.x, yTemp = bola.y;
-    let vxTemp = velocidade.x, vyTemp = velocidade.y;
-    
-    ctx.strokeStyle = CORES.BRANCO;
-    ctx.setLineDash([4, 4]);
-    ctx.lineWidth = 2; // Linha um pouco mais grossa
-    ctx.beginPath();
-    ctx.moveTo(xTemp, yTemp);
-
-    for (let t = 0; t < TEMPO_DE_VOO; t++) {
-        vyTemp += G; 
-        xTemp += vxTemp;
-        yTemp += vyTemp;
-        
-        ctx.lineTo(xTemp, yTemp);
-        
-        if (yTemp >= ALTURA_CHAO - RAIO_BOLA || xTemp <= 0 || xTemp >= LARGURA || yTemp <= 0) break;
-    }
-    ctx.stroke();
-    ctx.setLineDash([]); 
-
-    // Desenha o ponto final (O Alvo)
-    ctx.fillStyle = 'red';
-    ctx.beginPath();
-    ctx.arc(xTemp, yTemp, 4, 0, Math.PI * 2);
-    ctx.fill();
-}
 
 // Inicia o jogo quando o script é carregado
 iniciarJogo();
