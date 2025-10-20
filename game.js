@@ -1,4 +1,4 @@
-// game.js (Versão Final 7.0: Aro atravessável, bola passa pelo meio, mira funcionando)
+// game.js — Versão 8.0 (cesta fixa, aro realista, mira com bolinha)
 
 // ---------------------------------------------
 // 1. SETUP DO CANVAS E CONTEXTO
@@ -35,9 +35,9 @@ const CORES = {
 // 3. NÍVEL DE DIFICULDADE
 // ---------------------------------------------
 const NiveisDificuldade = {
-    FACIL: { fatorMira: 3.0, forcaMaxima: 50, erroLancamento: 0.0, coefRestituicaoMapa: 0.95 },
-    MEDIO: { fatorMira: 1.5, forcaMaxima: 35, erroLancamento: 0.0, coefRestituicaoMapa: 0.7 },
-    DIFICIL: { fatorMira: 0.5, forcaMaxima: 20, erroLancamento: 0.2, coefRestituicaoMapa: 0.4 }
+    FACIL: { fatorMira: 1.5, forcaMaxima: 40, erroLancamento: 0.05, coefRestituicaoMapa: 0.75 },
+    MEDIO: { fatorMira: 1.2, forcaMaxima: 35, erroLancamento: 0.08, coefRestituicaoMapa: 0.7 },
+    DIFICIL: { fatorMira: 1.0, forcaMaxima: 32, erroLancamento: 0.1, coefRestituicaoMapa: 0.6 }
 };
 
 let dificuldadeAtual = NiveisDificuldade.MEDIO;
@@ -71,13 +71,12 @@ class Cesto {
     constructor() {
         this.LARGURA_TABELA = 10;
         this.ALTURA_TABELA = 120;
-        this.POS_X = LARGURA - 100;
-        this.POS_Y = ALTURA_CHAO - this.ALTURA_TABELA - 50;
-        this.LARGURA_ARO = 60;
-        this.RAIO_ARO = 5;
-        this.aroY = this.POS_Y + 40;
-        this.aroLeftX = this.POS_X - this.LARGURA_ARO;
-        this.aroRightX = this.POS_X;
+        this.POS_X = LARGURA - 110;
+        this.POS_Y = ALTURA - 300; // fixo no alto
+        this.ARO_LARGURA = RAIO_BOLA * 2;
+        this.ARO_Y = this.POS_Y + 40;
+        this.ARO_ESQ = this.POS_X - this.ARO_LARGURA;
+        this.ARO_DIR = this.POS_X;
         this.passouPeloAroTopo = false;
     }
 
@@ -86,35 +85,50 @@ class Cesto {
         ctx.fillStyle = CORES.BRANCO;
         ctx.fillRect(this.POS_X, this.POS_Y, this.LARGURA_TABELA, this.ALTURA_TABELA);
         ctx.strokeStyle = CORES.PRETO;
-        ctx.lineWidth = 2;
         ctx.strokeRect(this.POS_X, this.POS_Y, this.LARGURA_TABELA, this.ALTURA_TABELA);
 
-        // Aro (apenas visual)
-        ctx.strokeStyle = 'red';
+        // Aro
+        ctx.strokeStyle = "red";
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.moveTo(this.aroLeftX, this.aroY);
-        ctx.lineTo(this.aroRightX, this.aroY);
+        ctx.moveTo(this.ARO_ESQ, this.ARO_Y);
+        ctx.lineTo(this.ARO_DIR, this.ARO_Y);
         ctx.stroke();
 
         // Rede
-        ctx.strokeStyle = '#FFFFFF';
+        ctx.strokeStyle = "#fff";
         ctx.lineWidth = 1;
         ctx.beginPath();
-        for (let i = 0; i < 4; i++) {
-            ctx.moveTo(this.aroLeftX + (i * this.LARGURA_ARO / 3), this.aroY);
-            ctx.lineTo(this.aroLeftX + (i * this.LARGURA_ARO / 3) + 10, this.aroY + 60);
+        for (let i = 0; i <= 4; i++) {
+            ctx.moveTo(this.ARO_ESQ + (i * (this.ARO_LARGURA / 4)), this.ARO_Y);
+            ctx.lineTo(this.ARO_ESQ + (i * (this.ARO_LARGURA / 4)) + 5, this.ARO_Y + 40);
         }
         ctx.stroke();
     }
 
     verificarColisao(bola) {
-        // A tabela ainda colide lateralmente
-        if (bola.x + RAIO_BOLA >= this.POS_X && bola.x - RAIO_BOLA < this.POS_X + this.LARGURA_TABELA &&
-            bola.y > this.POS_Y) {
+        // colisão lateral da tabela
+        if (bola.x + RAIO_BOLA >= this.POS_X && bola.x < this.POS_X + this.LARGURA_TABELA &&
+            bola.y > this.POS_Y && bola.y < this.POS_Y + this.ALTURA_TABELA) {
             bola.velX *= -coefRestituicaoMapa;
             bola.x = this.POS_X - RAIO_BOLA;
         }
+
+        // colisão lateral aro esquerdo
+        if (Math.abs(bola.x - this.ARO_ESQ) < RAIO_BOLA &&
+            Math.abs(bola.y - this.ARO_Y) < RAIO_BOLA) {
+            bola.x = this.ARO_ESQ - RAIO_BOLA;
+            bola.velX *= -0.6;
+        }
+
+        // colisão lateral aro direito
+        if (Math.abs(bola.x - this.ARO_DIR) < RAIO_BOLA &&
+            Math.abs(bola.y - this.ARO_Y) < RAIO_BOLA) {
+            bola.x = this.ARO_DIR + RAIO_BOLA;
+            bola.velX *= -0.6;
+        }
+
+        // chão, paredes e teto
         if (bola.x - RAIO_BOLA < 0) {
             bola.x = RAIO_BOLA;
             bola.velX *= -coefRestituicaoMapa;
@@ -129,11 +143,11 @@ class Cesto {
     }
 
     verificarPontuacao(bola) {
-        const passouHorizontal = bola.x > this.aroLeftX && bola.x < this.aroRightX;
-        if (passouHorizontal && bola.y - RAIO_BOLA < this.aroY && bola.velY > 0) {
+        const dentroX = bola.x > this.ARO_ESQ && bola.x < this.ARO_DIR;
+        if (dentroX && bola.y - RAIO_BOLA < this.ARO_Y && bola.velY > 0) {
             this.passouPeloAroTopo = true;
         }
-        if (this.passouPeloAroTopo && bola.y - RAIO_BOLA > this.aroY + 10) {
+        if (this.passouPeloAroTopo && bola.y - RAIO_BOLA > this.ARO_Y + 10) {
             this.passouPeloAroTopo = false;
             return true;
         }
@@ -188,27 +202,21 @@ class Bola {
             ctx.ellipse(this.x + 5, ALTURA_CHAO - raioSombra / 4, raioSombra * 2, raioSombra / 4, 0, 0, Math.PI * 2);
             ctx.fill();
         }
-        // Corpo
-        const gradiente = ctx.createRadialGradient(
+
+        // Bola
+        const grad = ctx.createRadialGradient(
             this.x - RAIO_BOLA / 3, this.y - RAIO_BOLA / 3, 5,
             this.x, this.y, RAIO_BOLA * 1.5
         );
-        gradiente.addColorStop(0, CORES.LARANJA_CLARO);
-        gradiente.addColorStop(1, CORES.LARANJA_ESCURO);
-        ctx.fillStyle = gradiente;
+        grad.addColorStop(0, CORES.LARANJA_CLARO);
+        grad.addColorStop(1, CORES.LARANJA_ESCURO);
+        ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(this.x, this.y, RAIO_BOLA, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = 'rgba(255,255,255,0.7)';
-        ctx.beginPath();
-        ctx.arc(this.x - RAIO_BOLA * 0.5, this.y - RAIO_BOLA * 0.7, RAIO_BOLA * 0.2, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.strokeStyle = CORES.PRETO;
         ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, RAIO_BOLA, 0, Math.PI * 2);
         ctx.stroke();
     }
 
@@ -262,12 +270,11 @@ function desenhar() {
 }
 
 function desenharAmbienteJS() {
-    const gradiente = ctx.createLinearGradient(0,0,0,ALTURA_CHAO);
-    gradiente.addColorStop(0, CORES.AZUL_CEU_CLARO);
-    gradiente.addColorStop(1, CORES.AZUL_CEU_ESCURO);
-    ctx.fillStyle = gradiente;
+    const grad = ctx.createLinearGradient(0,0,0,ALTURA_CHAO);
+    grad.addColorStop(0, CORES.AZUL_CEU_CLARO);
+    grad.addColorStop(1, CORES.AZUL_CEU_ESCURO);
+    ctx.fillStyle = grad;
     ctx.fillRect(0,0,LARGURA,ALTURA_CHAO);
-
     ctx.fillStyle = CORES.CHAO_ESCURO;
     ctx.fillRect(0, ALTURA_CHAO, LARGURA, 10);
 }
@@ -294,23 +301,30 @@ function desenharLinhaMiraJS() {
     const xAlvo = bola.x + dx * fatorForcaMira;
     const yAlvo = bola.y + dy * fatorForcaMira;
     const yLimitado = Math.max(50, yAlvo);
-    const velocidade = FisicaUtil.calcularVelocidadeParaAlvo(bola.x, bola.y, xAlvo, yLimitado, TEMPO_DE_VOO);
 
-    let xTemp = bola.x, yTemp = bola.y, vxTemp = velocidade.x, vyTemp = velocidade.y;
+    const vel = FisicaUtil.calcularVelocidadeParaAlvo(bola.x, bola.y, xAlvo, yLimitado, TEMPO_DE_VOO);
+    let xTemp = bola.x, yTemp = bola.y, vx = vel.x, vy = vel.y;
+
     ctx.strokeStyle = CORES.BRANCO;
     ctx.setLineDash([4,4]);
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(xTemp, yTemp);
-    for (let t=0; t<TEMPO_DE_VOO; t++) {
-        vyTemp += G;
-        xTemp += vxTemp;
-        yTemp += vyTemp;
+    for (let t = 0; t < TEMPO_DE_VOO; t++) {
+        vy += G;
+        xTemp += vx;
+        yTemp += vy;
         ctx.lineTo(xTemp, yTemp);
         if (yTemp >= ALTURA_CHAO) break;
     }
     ctx.stroke();
     ctx.setLineDash([]);
+
+    // bolinha da mira (ponta)
+    ctx.fillStyle = "yellow";
+    ctx.beginPath();
+    ctx.arc(xTemp, yTemp, 5, 0, Math.PI * 2);
+    ctx.fill();
 }
 
 // ---------------------------------------------
@@ -331,61 +345,53 @@ function atualizar() {
 // 12. INPUT
 // ---------------------------------------------
 canvas.addEventListener('mousedown', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    if (!bola.emMovimento && Math.hypot(mouseX - bola.x, mouseY - bola.y) < RAIO_BOLA*2) {
+    const r = canvas.getBoundingClientRect();
+    const x = e.clientX - r.left;
+    const y = e.clientY - r.top;
+    if (!bola.emMovimento && Math.hypot(x - bola.x, y - bola.y) < RAIO_BOLA * 2) {
         aPrepararLancamento = true;
-        posRatoInicio = {x: mouseX, y: mouseY};
+        posRatoInicio = { x, y };
     }
 });
 
 canvas.addEventListener('mouseup', (e) => {
     if (!aPrepararLancamento) return;
     aPrepararLancamento = false;
-
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    const dx = mouseX - posRatoInicio.x;
-    const dy = mouseY - posRatoInicio.y;
+    const r = canvas.getBoundingClientRect();
+    const x = e.clientX - r.left;
+    const y = e.clientY - r.top;
+    const dx = x - posRatoInicio.x;
+    const dy = y - posRatoInicio.y;
     const xAlvo = bola.x + dx * fatorForcaMira;
     const yAlvo = bola.y + dy * fatorForcaMira;
     const yLimitado = Math.max(50, yAlvo);
+    const vel = FisicaUtil.calcularVelocidadeParaAlvo(bola.x, bola.y, xAlvo, yLimitado, TEMPO_DE_VOO);
 
-    const velocidade = FisicaUtil.calcularVelocidadeParaAlvo(bola.x, bola.y, xAlvo, yLimitado, TEMPO_DE_VOO);
-    let forcaX = velocidade.x;
-    let forcaY = velocidade.y;
-
+    let fx = vel.x;
+    let fy = vel.y;
     if (erroLancamento > 0) {
-        const fatorErro = Math.random() * 2 * erroLancamento - erroLancamento;
-        forcaX *= (1 + fatorErro);
-        forcaY *= (1 + fatorErro * 0.5);
+        const erro = Math.random() * 2 * erroLancamento - erroLancamento;
+        fx *= (1 + erro);
+        fy *= (1 + erro * 0.5);
     }
 
-    const forcaTotal = Math.hypot(forcaX, forcaY);
-    if (forcaTotal > forcaMaxima) {
-        const fatorAjuste = forcaMaxima / forcaTotal;
-        forcaX *= fatorAjuste;
-        forcaY *= fatorAjuste;
+    const total = Math.hypot(fx, fy);
+    if (total > forcaMaxima) {
+        const fator = forcaMaxima / total;
+        fx *= fator;
+        fy *= fator;
     }
 
-    if (forcaTotal > 1) {
-        bola.lancar(forcaX, forcaY);
-    }
+    if (total > 1) bola.lancar(fx, fy);
 });
 
 canvas.addEventListener('mousemove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    posRatoAtual = {x: e.clientX - rect.left, y: e.clientY - rect.top};
+    const r = canvas.getBoundingClientRect();
+    posRatoAtual = { x: e.clientX - r.left, y: e.clientY - r.top };
 });
 
 window.addEventListener('keydown', (e) => {
-    if (e.key === 'r' || e.key === 'R') {
-        bola.reiniciar();
-    }
+    if (e.key === 'r' || e.key === 'R') bola.reiniciar();
 });
 
 // ---------------------------------------------
@@ -403,6 +409,6 @@ function salvarRecorde(novo) {
 }
 
 // ---------------------------------------------
-// 14. INICIO
+// 14. INÍCIO
 // ---------------------------------------------
 iniciarJogo();
