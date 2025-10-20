@@ -1,16 +1,26 @@
-// game.js (Versão 3.0: Completo e com Todas as Correções de Inicialização e Escopo)
+// game.js (Versão Final: Código Completo e Robusto)
 
 // ---------------------------------------------
-// 1. SETUP DO CANVAS E CONTEXTO
+// 1. SETUP DO CANVAS E CONTEXTO (CORREÇÃO DE ROBUSTEZ)
 // ---------------------------------------------
 
 const canvas = document.getElementById('gameCanvas');
+
+// 1. Verificação do Canvas
 if (!canvas) {
-    console.error("Erro: Elemento canvas não encontrado. Verifique o index.html.");
+    console.error("Erro Crítico: Elemento canvas não encontrado. Verifique o index.html.");
     throw new Error("Canvas não inicializado."); 
 }
 
+// 2. Tenta Obter o Contexto
 const ctx = canvas.getContext('2d');
+
+// 3. Verificação do Contexto
+if (!ctx) {
+    console.error("Erro Crítico: Não foi possível obter o contexto 2D do canvas.");
+    throw new Error("Contexto 2D não suportado ou falhou na inicialização.");
+}
+
 const LARGURA = canvas.width;
 const ALTURA = canvas.height;
 const ALTURA_CHAO = ALTURA - 10;
@@ -56,7 +66,6 @@ let coefRestituicaoMapa = dificuldadeAtual.coefRestituicaoMapa;
 let pontuacao = 0;
 let recorde = 0; 
 
-// Variáveis de Estado do Mouse/Mira (CORREÇÃO DE ESCOPO - B2)
 let aPrepararLancamento = false;
 let posRatoInicio = null;
 let posRatoAtual = null; 
@@ -82,7 +91,7 @@ class Cesto {
         this.LARGURA_TABELA = 10;
         this.ALTURA_TABELA = 120;
         this.POS_X = LARGURA - 100;
-        // CORREÇÃO FINAL: Posição Y ajustada para ficar consistentemente abaixo do topo
+        // Posição Y ajustada para ficar consistente (150px do topo)
         this.POS_Y = 150; 
         this.LARGURA_ARO = 60;
         this.RAIO_ARO = 5;
@@ -271,7 +280,6 @@ class Bola {
 let bola, cesto;
 
 function iniciarJogo() {
-    // CORREÇÃO DE INICIALIZAÇÃO: Garantimos que o cesto é criado primeiro.
     cesto = new Cesto();
     bola = new Bola(100, ALTURA_CHAO - RAIO_BOLA, dificuldadeAtual.coefRestituicaoMapa); 
     
@@ -285,7 +293,6 @@ function gameLoop(currentTime) {
     if (delta > (1000 / FPS)) {
         lastTime = currentTime;
         
-        // Verificação robusta para evitar erros no início
         if (bola && cesto) { 
             atualizar();
             desenhar();
@@ -312,7 +319,26 @@ function atualizar() {
     }
 }
 
-// Funções de Desenho Auxiliares
+function desenhar() {
+    // 1. Limpa a tela
+    ctx.clearRect(0, 0, LARGURA, ALTURA);
+
+    // 2. Ambiente e Chão
+    desenharAmbienteJS();
+
+    // 3. Desenho da Mira
+    if (aPrepararLancamento && posRatoInicio && posRatoAtual) {
+        desenharLinhaMiraJS();
+    }
+    
+    // 4. Objetos de Jogo
+    cesto.desenhar();
+    bola.desenhar(); 
+    
+    // 5. Placar
+    desenharPlacarJS();
+}
+
 function desenharAmbienteJS() {
     const gradiente = ctx.createLinearGradient(0, 0, 0, ALTURA_CHAO);
     gradiente.addColorStop(0, CORES.AZUL_CEU_CLARO);
@@ -362,7 +388,6 @@ function desenharPlacarJS() {
 }
 
 function desenharLinhaMiraJS() {
-    // CORREÇÃO DE ESCOPO: Usa a variável global armazenada pelo mousemove
     if (!posRatoAtual || !posRatoInicio) return; 
 
     const dxArrasto = posRatoAtual.x - posRatoInicio.x;
@@ -501,7 +526,6 @@ canvas.addEventListener('mouseup', (e) => {
     }
 });
 
-// Listener de mousemove CRUCIAL para alimentar a variável global posRatoAtual
 canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
     posRatoAtual = { 
