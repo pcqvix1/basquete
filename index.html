@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basquete JS - Jogue Online!</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Estilos embutidos para o canvas */
+        canvas {
+            border: 5px solid #1a1a1a;
+            display: block;
+            margin: 20px auto;
+            background: linear-gradient(#add8e6, #6495ed); /* Céu simplificado */
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Basquete Online</h1>
+    </header>
+
+    <div id="controles">
+        <label for="dificuldade">Dificuldade:</label>
+        <select id="dificuldade" onchange="mudarDificuldade(this.value)">
+            <option value="FACIL">Fácil</option>
+            <option value="MEDIO" selected>Médio</option>
+            <option value="DIFICIL">Difícil</option>
+        </select>
+        <button onclick="reiniciarBola()">Reset Posição (R)</button>
+        <button onclick="reiniciarTudo()">Reiniciar Jogo</button>
+    </div>
+
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+    <script src="game.js"></script>
+
+</body>
+</html>
