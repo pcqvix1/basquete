@@ -1,4 +1,4 @@
-// game.js (Versão Final 5.0: Com Cesta e Mira Corrigidas)
+// game.js (Versão Final 6.0: Cesta e Mira corrigidas, loop estável)
 
 // ---------------------------------------------
 // 1. SETUP DO CANVAS E CONTEXTO 
@@ -80,7 +80,7 @@ const FisicaUtil = {
 };
 
 // ---------------------------------------------
-// 5. CLASSE CESTO (CORRIGIDA)
+// 5. CLASSE CESTO (CORRIGIDA: posição relativa ao chão)
 // ---------------------------------------------
 
 class Cesto {
@@ -89,14 +89,15 @@ class Cesto {
         this.ALTURA_TABELA = 120;
         this.POS_X = LARGURA - 100;
 
-        // CORREÇÃO 1: Posiciona a cesta acima do chão (ALTURA_CHAO - altura_tabela - offset)
-        this.POS_Y = ALTURA_CHAO - this.ALTURA_TABELA - 50; 
+        // Posiciona a tabela fixada ao chão (folga pequena)
+        this.POS_Y = ALTURA_CHAO - this.ALTURA_TABELA - 10;
 
         this.LARGURA_ARO = 60;
         this.RAIO_ARO = 5;
 
-        // Posição correta do aro em relação à tabela
-        this.aroY = this.POS_Y + 40; 
+        // aroY posicionado dentro da tabela num terço aprox (mais realista)
+        this.aroY = this.POS_Y + Math.floor(this.ALTURA_TABELA * 0.25);
+
         this.aroLeftX = this.POS_X - this.LARGURA_ARO;
         this.aroRightX = this.POS_X;
 
@@ -278,15 +279,16 @@ function iniciarJogo() {
     
     carregarRecorde();
     
-    // Inicia o Game Loop
-    gameLoop();
+    // Inicia o loop via requestAnimationFrame (modo correto)
+    requestAnimationFrame(gameLoop);
 }
 
-// CORREÇÃO 3: Game Loop ajustado
+// Game Loop seguro: aceita currentTime do rAF
 function gameLoop(currentTime) {
+    if (!currentTime) currentTime = performance.now();
     const delta = currentTime - lastTime;
     
-    if (delta > (1000 / FPS) || lastTime === 0) { 
+    if (lastTime === 0 || delta > (1000 / FPS)) { 
         lastTime = currentTime;
         
         atualizar(); // 1. Lógica e Posições
@@ -297,10 +299,9 @@ function gameLoop(currentTime) {
 }
 
 // ---------------------------------------------
-// 8. FUNÇÃO CENTRALIZADA DE DESENHO (CORRIGIDA)
+// 8. FUNÇÃO CENTRALIZADA DE DESENHO
 // ---------------------------------------------
 
-// CORREÇÃO 2: Novo desenhar() com verificações de segurança
 function desenhar() {
     ctx.clearRect(0, 0, LARGURA, ALTURA); // limpa o canvas
 
@@ -311,7 +312,7 @@ function desenhar() {
         desenharLinhaMiraJS();
     }
 
-    // Desenha objetos APENAS se existirem (verificações de segurança)
+    // Desenha objetos APENAS se existirem
     if (cesto) cesto.desenhar();
     if (bola) bola.desenhar();
 
@@ -323,7 +324,7 @@ function desenhar() {
 // ---------------------------------------------
 
 function atualizar() {
-    if (bola && cesto && bola.emMovimento) { // Verifica se bola e cesto existem
+    if (bola && cesto && bola.emMovimento) {
         bola.atualizarPosicao(); 
         cesto.verificarColisao(bola); 
 
@@ -385,7 +386,7 @@ function desenharPlacarJS() {
 }
 
 function desenharLinhaMiraJS() {
-    if (!posRatoAtual || !posRatoInicio) return; 
+    if (!posRatoAtual || !posRatoInicio || !bola) return; 
 
     const dxArrasto = posRatoAtual.x - posRatoInicio.x;
     const dyArrasto = posRatoAtual.y - posRatoInicio.y;
@@ -426,7 +427,6 @@ function desenharLinhaMiraJS() {
     ctx.fill();
 }
 
-
 // ---------------------------------------------
 // 11. CONTROLES E SALVAR DADOS
 // ---------------------------------------------
@@ -445,7 +445,9 @@ window.mudarDificuldade = function(nivel) {
 
 window.reiniciarBola = function() {
     bola = new Bola(100, ALTURA_CHAO - RAIO_BOLA, dificuldadeAtual.coefRestituicaoMapa);
-    cesto.passouPeloAroTopo = false;
+    posRatoInicio = null;
+    posRatoAtual = null;
+    if (cesto) cesto.passouPeloAroTopo = false;
 }
 
 window.reiniciarTudo = function() {
@@ -469,7 +471,7 @@ function salvarRecorde(novoRecorde) {
 }
 
 // ---------------------------------------------
-// 12. INPUT (Mouse e Toque)
+// 12. INPUT (Mouse e Toque) - CORREÇÕES AQUI
 // ---------------------------------------------
 
 canvas.addEventListener('mousedown', (e) => {
@@ -480,6 +482,9 @@ canvas.addEventListener('mousedown', (e) => {
     if (!bola.emMovimento && Math.hypot(mouseX - bola.x, mouseY - bola.y) < RAIO_BOLA * 2) {
         aPrepararLancamento = true;
         posRatoInicio = { x: mouseX, y: mouseY };
+        // importante: inicializa posRatoAtual para que a mira apareça mesmo sem mover o mouse
+        posRatoAtual = { x: mouseX, y: mouseY };
+        e.preventDefault();
     }
 });
 
@@ -490,6 +495,9 @@ canvas.addEventListener('mouseup', (e) => {
         const rect = canvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
+
+        // garante que posRatoAtual contenha a posição final do arrasto
+        posRatoAtual = { x: mouseX, y: mouseY };
 
         const dxArrasto = mouseX - posRatoInicio.x;
         const dyArrasto = mouseY - posRatoInicio.y;
@@ -520,6 +528,10 @@ canvas.addEventListener('mouseup', (e) => {
         if (forcaTotal > 1) { 
             bola.lancar(forcaX, forcaY);
         }
+
+        // limpa posições do arrasto
+        posRatoInicio = null;
+        posRatoAtual = null;
     }
 });
 
